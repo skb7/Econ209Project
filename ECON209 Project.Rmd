@@ -1,0 +1,204 @@
+---
+title: "ECON219 Project"
+author: "Sara Bolf"
+date: "3/4/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+suppressMessages(library("tidyverse"))
+```
+
+```{r,include=FALSE}
+# reading in possible libraries I may use
+
+library(ggplot2)
+library(knitr)
+library(tidyverse)
+library(dplyr)
+library(grid)
+library(gridExtra)
+library(GGally)
+library(car)
+library(utils)
+library(kableExtra)
+library(scales)
+library(moments)
+```
+
+
+```{r}
+library(readxl)
+poll_data <- read_excel("Downloads/trump-approval-ratings 2/polldatafinal.xltx")
+pollvar <- c("approve","strike","poststrike","strikedays","daysafter","stockmarket")
+poll_data <- poll_data[pollvar]
+colnames(poll_data)<-c("approve","sd","postsd","sddays","daysafter","stockmarket")
+attach(poll_data)
+```
+
+
+
+```{r}
+# create table of summary statistics for poll data
+
+poll_summary <- do.call(cbind, lapply(poll_data, summary))
+
+sum_table <- kable(round(poll_summary,3),col.names = c("Approval Rate","Shutdown","After Shutdown","Number of Days of Shutdown", "Number of Days after Shutdown","Stock Market"))
+
+kabtab <- kable(round(poll_summary,3),col.names = c("Approval Rate","Shutdown","After Shutdown","Number of Days of Shutdown", "Number of Days after Shutdown","Stock Market"),format="latex")
+
+kable_as_image(kabtab, filename = "poll_table",file_format = "png")
+```
+
+```{r}
+
+# histogram plots for each variable in the poll data set
+
+b1 <- ggplot(poll_data,aes(x= sd))+
+  geom_bar(width=.5)+
+  theme_bw() +
+  scale_x_discrete(limits=c(0, 1),labels = c("No Shutdown","Shutdown"))+
+  labs(x="Shutdown",y="Count")
+
+
+b2 <- ggplot(poll_data,aes(x= postsd))+
+  geom_bar(width=.5)+
+  theme_bw() +
+  scale_x_discrete(limits=c(0, 1),labels = c("Before or During Shutdown","After Shutdown"))+
+  labs(x="After Shutdown",y="Count")
+
+
+
+h1 <- ggplot(poll_data,aes(x=sddays))+
+  geom_histogram(bins=10)+
+  theme_bw()+
+  labs(x="Days of Shutdown",y="Count")
+
+
+h2 <- ggplot(poll_data,aes(x=daysafter))+
+  geom_histogram(bins=10)+
+  theme_bw()+
+  labs(x="Days after Shutdown",y="Count")
+
+
+
+h01<- ggplot(poll_data,aes(x=approve))+
+  geom_histogram(bins=10)+
+  theme_bw()+
+  labs(x="Approval Rate",y="Count")
+
+
+h02 <- ggplot(poll_data, aes(x=stockmarket))+
+  geom_histogram(bins=10)+
+  theme_bw()+
+  labs(x="Stock Market",y="Count")
+
+grid.arrange(b1,b2,h1,h2,h01,h02)
+
+ggsave("approvedata.png", plot =grid.arrange(b1,b2,h1,h2,h01,h02) )
+
+
+
+```
+
+
+```{r}
+
+# linear model with dependent variable approve and independent variables
+# sd, postsd, sddays, daysafter, and stockmarket.
+
+pollmod <- lm(approve ~ sd+postsd+sddays+daysafter+stockmarket)
+
+summary(pollmod)
+```
+
+
+
+```{r}
+
+# Create Fitted vs. Observed plot
+
+ggplot(pollmod, aes(x = pollmod$fitted.values, y = approve)) + geom_point() +
+  stat_smooth(method = "lm", col = "red") + 
+  labs(title="Fitted vs. Observed",x = "Fitted Values",y = "Observed Values")+
+  theme_bw()
+
+ ggsave(file="fittedvobserved.png", last_plot()) 
+
+
+```
+
+
+
+
+```{r}
+# create ANOVA table for pollmod
+
+poll_anova <- as.data.frame(anova(pollmod))
+row.names(poll_anova) <- c("Shutdown","After Shutdown","Days of Shutdown","Days after Shutdown","Stock Market","Residuals")
+
+anova_tab <- kable(poll_anova,format = "latex")
+
+kable_as_image(anova_tab, filename = "poll_anova",file_format = "png")
+```
+
+```{r}
+# 95% confidence intervals for each of the regression coefficients and intercept.  
+
+ci <- (confint(pollmod,conf.level=0.95))
+
+ci_df <- as.data.frame(ci)
+
+row.names(ci_df) <- c("(Intercept)","Shutdown","After Shutdown","Days of Shutdown","Days after Shutdown", "Stock Market")
+
+ci_tab <- kable(round(ci_df,3),format = "latex")
+
+kable_as_image(ci_tab, filename = "sd_ci",file_format = "png")
+```
+
+
+```{r}
+mean(pollmod$residuals)
+```
+
+
+```{r}
+
+# find fourth moment for each variable in poll_data
+
+kurtosis(poll_data$approve)
+kurtosis(poll_data$sd)
+kurtosis(poll_data$postsd)
+kurtosis(poll_data$sddays)
+kurtosis(poll_data$daysafter)
+kurtosis(poll_data$stockmarket)
+
+```
+
+
+```{r}
+# creating table of VIF values for each independent variable in pollmod.
+
+vif_df <- as.data.frame((vif(pollmod)))
+
+row.names(vif_df) <- c("Shutdown","After Shutdown","Days of Shutdown","Days after Shutdown", "Stock Market")
+
+vif_tab <- kable(round(vif_df,3),col.names = c("VIF"),format = "latex")
+
+kable_as_image(vif_tab, filename = "vif_poll",file_format = "png")
+```
+
+
+```{r}
+
+# correlation table for variables in poll_data
+
+sum_table <- kable(round(cor(poll_data),3),col.names = c("Approval Rate","Shutdown","After Shutdown","Number of Days of Shutdown", "Number of Days after Shutdown","Stock Market"))
+
+kabtab <- kable(round(cor(poll_data),3),col.names = c("Approval Rate","Shutdown","After Shutdown","Number of Days of Shutdown", "Number of Days after Shutdown","Stock Market"),format="latex")
+
+kable_as_image(kabtab, filename = "pollcor",file_format = "png")
+
+```
+
